@@ -387,3 +387,555 @@
         <button onclick="backToMenu()">Назад</button>
     </div>
 
+    <script>
+        // Общие функции
+        function startGame(gameId) {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById(gameId).classList.remove('hidden');
+            if (gameId === 'tic-tac-toe') initTicTacToe();
+            if (gameId === 'memory') initMemory();
+            if (gameId === 'snake') initSnake();
+            if (gameId === '2048') init2048();
+            if (gameId === 'rps') initRPS();
+            if (gameId === 'battleship') initBattleship();
+            if (gameId === 'puzzle') initPuzzle();
+        }
+
+        function backToMenu() {
+            document.querySelectorAll('.game-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById('menu').classList.remove('hidden');
+            if (snakeInterval) clearInterval(snakeInterval);
+        }
+
+        // Крестики-Нолики (2 игрока)
+        let tttBoard = Array(9).fill(null);
+        let tttCurrentPlayer = 'X';
+        let tttGameOver = false;
+
+        function initTicTacToe() {
+            const board = document.getElementById('tic-tac-toe-board');
+            board.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('touchend', handleTicTacToeClick);
+                board.appendChild(cell);
+            }
+            updateTicTacToeStatus('Ход: X');
+            tttBoard = Array(9).fill(null);
+            tttCurrentPlayer = 'X';
+            tttGameOver = false;
+        }
+
+        function handleTicTacToeClick(e) {
+            e.preventDefault();
+            if (tttGameOver) return;
+            const index = e.target.dataset.index;
+            if (tttBoard[index]) return;
+            tttBoard[index] = tttCurrentPlayer;
+            e.target.textContent = tttCurrentPlayer;
+            if (checkTicTacToeWin()) {
+                updateTicTacToeStatus(`Победил ${tttCurrentPlayer}!`);
+                tttGameOver = true;
+            } else if (tttBoard.every(cell => cell)) {
+                updateTicTacToeStatus('Ничья!');
+                tttGameOver = true;
+            } else {
+                tttCurrentPlayer = tttCurrentPlayer === 'X' ? 'O' : 'X';
+                updateTicTacToeStatus(`Ход: ${tttCurrentPlayer}`);
+            }
+        }
+
+        function checkTicTacToeWin() {
+            const wins = [
+                [0,1,2], [3,4,5], [6,7,8],
+                [0,3,6], [1,4,7], [2,5,8],
+                [0,4,8], [2,4,6]
+            ];
+            return wins.some(combo => combo.every(i => tttBoard[i] === tttCurrentPlayer));
+        }
+
+        function updateTicTacToeStatus(msg) {
+            document.getElementById('tic-tac-toe-status').textContent = msg;
+        }
+
+        function resetTicTacToe() {
+            initTicTacToe();
+        }
+
+        // Игра на Память (1 игрок)
+        let memoryCards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+
+        function initMemory() {
+            const grid = document.getElementById('memory-grid');
+            grid.innerHTML = '';
+            const symbols = ['🍎', '🍌', '🍒', '🍇', '🍉', '🍓', '🍑', '🍍'];
+            memoryCards = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < memoryCards.length; i++) {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.index = i;
+                const back = document.createElement('div');
+                back.classList.add('back');
+                const front = document.createElement('div');
+                front.classList.add('front');
+                front.textContent = memoryCards[i];
+                card.appendChild(back);
+                card.appendChild(front);
+                card.addEventListener('touchend', handleMemoryClick);
+                grid.appendChild(card);
+            }
+            flippedCards = [];
+            matchedPairs = 0;
+            updateMemoryStatus('Найдите пары!');
+        }
+
+        function handleMemoryClick(e) {
+            e.preventDefault();
+            if (flippedCards.length >= 2) return;
+            const index = e.target.closest('.card').dataset.index;
+            const card = document.querySelector(`.card[data-index="${index}"]`);
+            if (flippedCards.includes(index) || card.classList.contains('matched')) return;
+            card.classList.add('flipped');
+            flippedCards.push(index);
+            if (flippedCards.length === 2) {
+                setTimeout(checkMemoryMatch, 1000);
+            }
+        }
+
+        function checkMemoryMatch() {
+            const [idx1, idx2] = flippedCards;
+            const card1 = document.querySelector(`.card[data-index="${idx1}"]`);
+            const card2 = document.querySelector(`.card[data-index="${idx2}"]`);
+            if (memoryCards[idx1] === memoryCards[idx2]) {
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                matchedPairs++;
+                if (matchedPairs === memoryCards.length / 2) {
+                    updateMemoryStatus('Вы выиграли!');
+                }
+            } else {
+                card1.classList.remove('flipped');
+                card2.classList.remove('flipped');
+            }
+            flippedCards = [];
+        }
+
+        function updateMemoryStatus(msg) {
+            document.getElementById('memory-status').textContent = msg;
+        }
+
+        function resetMemory() {
+            initMemory();
+        }
+
+        // Змейка (1 игрок)
+        let snakeCanvas, snakeCtx, snake, food, direction = 'RIGHT', score, snakeInterval;
+
+        function initSnake() {
+            snakeCanvas = document.getElementById('snake-canvas');
+            snakeCtx = snakeCanvas.getContext('2d');
+            snake = [{x: 140, y: 140}, {x: 130, y: 140}, {x: 120, y: 140}];
+            food = generateFood();
+            score = 0;
+            updateSnakeScore();
+            snakeInterval = setInterval(updateSnake, 150);
+        }
+
+        function changeDirection(newDir) {
+            if ((newDir === 'LEFT' && direction !== 'RIGHT') ||
+                (newDir === 'RIGHT' && direction !== 'LEFT') ||
+                (newDir === 'UP' && direction !== 'DOWN') ||
+                (newDir === 'DOWN' && direction !== 'UP')) {
+                direction = newDir;
+            }
+        }
+
+        function updateSnake() {
+            const head = {...snake[0]};
+            if (direction === 'RIGHT') head.x += 10;
+            if (direction === 'LEFT') head.x -= 10;
+            if (direction === 'UP') head.y -= 10;
+            if (direction === 'DOWN') head.y += 10;
+
+            if (head.x >= 280 || head.x < 0 || head.y >= 280 || head.y < 0 || snake.some((s, i) => i > 0 && s.x === head.x && s.y === head.y)) {
+                clearInterval(snakeInterval);
+                alert('Игра окончена! Счет: ' + score);
+                return;
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                updateSnakeScore();
+                food = generateFood();
+            } else {
+                snake.pop();
+            }
+
+            drawSnake();
+        }
+
+        function drawSnake() {
+            snakeCtx.clearRect(0, 0, 280, 280);
+            snakeCtx.fillStyle = '#00ff88';
+            snake.forEach(s => snakeCtx.fillRect(s.x, s.y, 10, 10));
+            snakeCtx.fillStyle = '#ff4d4d';
+            snakeCtx.fillRect(food.x, food.y, 10, 10);
+        }
+
+        function generateFood() {
+            let x = Math.floor(Math.random() * 28) * 10;
+            let y = Math.floor(Math.random() * 28) * 10;
+            return {x, y};
+        }
+
+        function updateSnakeScore() {
+            document.getElementById('snake-score').textContent = `Счет: ${score}`;
+        }
+
+        function resetSnake() {
+            clearInterval(snakeInterval);
+            initSnake();
+        }
+
+        // 2048 (1 игрок)
+        let board2048 = Array.from({length: 4}, () => Array(4).fill(0));
+        let score2048 = 0;
+        let touchStartX, touchStartY;
+
+        function init2048() {
+            board2048 = Array.from({length: 4}, () => Array(4).fill(0));
+            score2048 = 0;
+            addRandomTile();
+            addRandomTile();
+            draw2048Board();
+            update2048Score();
+            const board = document.getElementById('game-2048-board');
+            board.addEventListener('touchstart', handleTouchStart);
+            board.addEventListener('touchend', handleTouchEnd);
+        }
+
+        function addRandomTile() {
+            const empty = [];
+            board2048.forEach((row, i) => row.forEach((val, j) => { if (val === 0) empty.push({i, j}); }));
+            if (empty.length === 0) return;
+            const {i, j} = empty[Math.floor(Math.random() * empty.length)];
+            board2048[i][j] = Math.random() < 0.9 ? 2 : 4;
+        }
+
+        function draw2048Board() {
+            const grid = document.getElementById('game-2048-board');
+            grid.innerHTML = '';
+            board2048.flat().forEach(val => {
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+                tile.textContent = val || '';
+                tile.style.backgroundColor = getTileColor(val);
+                grid.appendChild(tile);
+            });
+        }
+
+        function getTileColor(val) {
+            const colors = {
+                2: '#3a3a4d', 4: '#4a4a5d', 8: '#5a5a6d', 16: '#6a6a7d',
+                32: '#7a7a8d', 64: '#8a8a9d', 128: '#9a9aad', 256: '#aaabad',
+                512: '#bababd', 1024: '#cacacd', 2048: '#00ff88'
+            };
+            return colors[val] || '#2a2a3d';
+        }
+
+        function handleTouchStart(e) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }
+
+        function handleTouchEnd(e) {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (dx > 50) move2048('right');
+                else if (dx < -50) move2048('left');
+            } else {
+                if (dy > 50) move2048('down');
+                else if (dy < -50) move2048('up');
+            }
+        }
+
+        function move2048(dir) {
+            let moved = false;
+            if (dir === 'up') {
+                for (let j = 0; j < 4; j++) {
+                    let col = [board2048[0][j], board2048[1][j], board2048[2][j], board2048[3][j]];
+                    let newCol = mergeTiles(col);
+                    for (let i = 0; i < 4; i++) {
+                        if (board2048[i][j] !== newCol[i]) moved = true;
+                        board2048[i][j] = newCol[i];
+                    }
+                }
+            } else if (dir === 'down') {
+                for (let j = 0; j < 4; j++) {
+                    let col = [board2048[3][j], board2048[2][j], board2048[1][j], board2048[0][j]];
+                    let newCol = mergeTiles(col);
+                    for (let i = 0; i < 4; i++) {
+                        if (board2048[3-i][j] !== newCol[i]) moved = true;
+                        board2048[3-i][j] = newCol[i];
+                    }
+                }
+            } else if (dir === 'left') {
+                for (let i = 0; i < 4; i++) {
+                    let row = [...board2048[i]];
+                    let newRow = mergeTiles(row);
+                    if (board2048[i].some((v, idx) => v !== newRow[idx])) moved = true;
+                    board2048[i] = newRow;
+                }
+            } else if (dir === 'right') {
+                for (let i = 0; i < 4; i++) {
+                    let row = [...board2048[i]].reverse();
+                    let newRow = mergeTiles(row).reverse();
+                    if (board2048[i].some((v, idx) => v !== newRow[idx])) moved = true;
+                    board2048[i] = newRow;
+                }
+            }
+            if (moved) {
+                addRandomTile();
+                draw2048Board();
+                update2048Score();
+                if (board2048.flat().includes(2048)) alert('Вы выиграли!');
+            }
+        }
+
+        function mergeTiles(line) {
+            let result = line.filter(x => x !== 0);
+            for (let i = 0; i < result.length - 1; i++) {
+                if (result[i] === result[i + 1] && result[i] !== 0) {
+                    result[i] *= 2;
+                    score2048 += result[i];
+                    result.splice(i + 1, 1);
+                }
+            }
+            while (result.length < 4) result.push(0);
+            return result;
+        }
+
+        function update2048Score() {
+            document.getElementById('game-2048-score').textContent = `Счет: ${score2048}`;
+        }
+
+        function reset2048() {
+            init2048();
+        }
+
+        // Камень-Ножницы-Бумага (2 игрока)
+        let rpsPlayer1Choice, rpsPlayer2Choice, rpsCurrentPlayer = 1;
+
+        function initRPS() {
+            rpsPlayer1Choice = null;
+            rpsPlayer2Choice = null;
+            rpsCurrentPlayer = 1;
+            updateRPSStatus('Игрок 1: Выберите');
+            document.getElementById('rps-result').textContent = '';
+            document.getElementById('rps-options').style.display = 'flex';
+        }
+
+        function playRPS(choice) {
+            if (rpsCurrentPlayer === 1) {
+                rpsPlayer1Choice = choice;
+                updateRPSStatus('Игрок 2: Выберите');
+                rpsCurrentPlayer = 2;
+            } else {
+                rpsPlayer2Choice = choice;
+                determineRPSWinner();
+                document.getElementById('rps-options').style.display = 'none';
+            }
+        }
+
+        function determineRPSWinner() {
+            if (rpsPlayer1Choice === rpsPlayer2Choice) {
+                document.getElementById('rps-result').textContent = 'Ничья!';
+            } else if (
+                (rpsPlayer1Choice === 'rock' && rpsPlayer2Choice === 'scissors') ||
+                (rpsPlayer1Choice === 'scissors' && rpsPlayer2Choice === 'paper') ||
+                (rpsPlayer1Choice === 'paper' && rpsPlayer2Choice === 'rock')
+            ) {
+                document.getElementById('rps-result').textContent = 'Победил Игрок 1!';
+            } else {
+                document.getElementById('rps-result').textContent = 'Победил Игрок 2!';
+            }
+        }
+
+        function updateRPSStatus(msg) {
+            document.querySelector('#rps p').textContent = msg;
+        }
+
+        function resetRPS() {
+            initRPS();
+        }
+
+        // Морской Бой (2 игрока)
+        let bsPlayer1Ships = [], bsPlayer2Ships = [], bsCurrentPlayer = 1, bsPhase = 'setup1';
+
+        function initBattleship() {
+            bsPlayer1Ships = [];
+            bsPlayer2Ships = [];
+            bsCurrentPlayer = 1;
+            bsPhase = 'setup1';
+            const grid1 = document.getElementById('player1-grid');
+            const grid2 = document.getElementById('player2-grid');
+            grid1.innerHTML = '';
+            grid2.innerHTML = '';
+            grid2.classList.add('hidden');
+            for (let i = 0; i < 25; i++) {
+                const cell1 = document.createElement('div');
+                cell1.classList.add('bs-cell');
+                cell1.dataset.index = i;
+                cell1.addEventListener('touchend', handleBattleshipClick);
+                grid1.appendChild(cell1);
+                const cell2 = cell1.cloneNode();
+                grid2.appendChild(cell2);
+            }
+            updateBattleshipStatus('Расстановка кораблей для Игрока 1 (выберите 3 клетки)');
+            document.getElementById('startBattleshipPlay').style.display = 'block';
+        }
+
+        function handleBattleshipClick(e) {
+            e.preventDefault();
+            const index = parseInt(e.target.dataset.index);
+            if (bsPhase === 'setup1') {
+                if (bsPlayer1Ships.includes(index)) return;
+                bsPlayer1Ships.push(index);
+                e.target.style.backgroundColor = '#00ff88';
+                if (bsPlayer1Ships.length === 3) {
+                    bsPhase = 'setup2';
+                    document.getElementById('player1-grid').classList.add('hidden');
+                    document.getElementById('player2-grid').classList.remove('hidden');
+                    updateBattleshipStatus('Расстановка кораблей для Игрока 2 (выберите 3 клетки)');
+                }
+            } else if (bsPhase === 'setup2') {
+                if (bsPlayer2Ships.includes(index)) return;
+                bsPlayer2Ships.push(index);
+                e.target.style.backgroundColor = '#00ff88';
+                if (bsPlayer2Ships.length === 3) {
+                    bsPhase = 'play';
+                    document.getElementById('startBattleshipPlay').style.display = 'none';
+                    updateBattleshipStatus('Ход Игрока 1 (атакуйте поле противника)');
+                    document.getElementById('player1-grid').classList.remove('hidden');
+                    document.getElementById('player2-grid').classList.remove('hidden');
+                    // Скрыть корабли после расстановки
+                    document.querySelectorAll('#player1-grid .bs-cell').forEach(cell => {
+                        if (bsPlayer1Ships.includes(parseInt(cell.dataset.index))) {
+                            cell.style.backgroundColor = '#3a3a4d';
+                        }
+                    });
+                    document.querySelectorAll('#player2-grid .bs-cell').forEach(cell => {
+                        if (bsPlayer2Ships.includes(parseInt(cell.dataset.index))) {
+                            cell.style.backgroundColor = '#3a3a4d';
+                        }
+                    });
+                }
+            } else if (bsPhase === 'play') {
+                const targetGrid = bsCurrentPlayer === 1 ? document.getElementById('player2-grid') : document.getElementById('player1-grid');
+                const targetShips = bsCurrentPlayer === 1 ? bsPlayer2Ships : bsPlayer1Ships;
+                const cell = targetGrid.children[index];
+                if (cell.classList.contains('bs-hit') || cell.classList.contains('bs-miss')) return;
+                if (targetShips.includes(index)) {
+                    cell.classList.add('bs-hit');
+                    targetShips.splice(targetShips.indexOf(index), 1);
+                    if (targetShips.length === 0) {
+                        alert(`Победил Игрок ${bsCurrentPlayer}!`);
+                        bsPhase = 'over';
+                    }
+                } else {
+                    cell.classList.add('bs-miss');
+                }
+                bsCurrentPlayer = bsCurrentPlayer === 1 ? 2 : 1;
+                updateBattleshipStatus(`Ход Игрока ${bsCurrentPlayer} (атакуйте поле противника)`);
+            }
+        }
+
+        function startBattleshipPlay() {
+            if (bsPhase === 'setup2' && bsPlayer2Ships.length === 3) {
+                bsPhase = 'play';
+                document.getElementById('startBattleshipPlay').style.display = 'none';
+                updateBattleshipStatus('Ход Игрока 1 (атакуйте поле противника)');
+                document.getElementById('player1-grid').classList.remove('hidden');
+                document.getElementById('player2-grid').classList.remove('hidden');
+                document.querySelectorAll('#player1-grid .bs-cell').forEach(cell => {
+                    if (bsPlayer1Ships.includes(parseInt(cell.dataset.index))) {
+                        cell.style.backgroundColor = '#3a3a4d';
+                    }
+                });
+                document.querySelectorAll('#player2-grid .bs-cell').forEach(cell => {
+                    if (bsPlayer2Ships.includes(parseInt(cell.dataset.index))) {
+                        cell.style.backgroundColor = '#3a3a4d';
+                    }
+                });
+            }
+        }
+
+        function updateBattleshipStatus(msg) {
+            document.getElementById('battleship-status').textContent = msg;
+        }
+
+        function resetBattleship() {
+            initBattleship();
+        }
+
+        // Слайдер-Пазл (1 игрок)
+        let puzzleTiles = [1,2,3,4,5,6,7,8,0];
+        let emptyIndex = 8;
+
+        function initPuzzle() {
+            puzzleTiles = [1,2,3,4,5,6,7,8,0].sort(() => Math.random() - 0.5);
+            emptyIndex = puzzleTiles.indexOf(0);
+            drawPuzzle();
+            updatePuzzleStatus('Соберите числа по порядку!');
+        }
+
+        function drawPuzzle() {
+            const grid = document.getElementById('puzzle-grid');
+            grid.innerHTML = '';
+            puzzleTiles.forEach((val, i) => {
+                const tile = document.createElement('div');
+                tile.classList.add('puzzle-tile');
+                if (val === 0) tile.classList.add('empty');
+                tile.textContent = val || '';
+                tile.dataset.index = i;
+                tile.addEventListener('touchend', handlePuzzleClick);
+                grid.appendChild(tile);
+            });
+        }
+
+        function handlePuzzleClick(e) {
+            e.preventDefault();
+            const index = parseInt(e.target.dataset.index);
+            const moves = [1, -1, 3, -3];
+            for (let move of moves) {
+                if (index + move === emptyIndex && (Math.abs(move) === 1 ? Math.floor(index / 3) === Math.floor(emptyIndex / 3) : true)) {
+                    [puzzleTiles[index], puzzleTiles[emptyIndex]] = [puzzleTiles[emptyIndex], puzzleTiles[index]];
+                    emptyIndex = index;
+                    drawPuzzle();
+                    if (puzzleTiles.join(',') === '1,2,3,4,5,6,7,8,0') {
+                        updatePuzzleStatus('Пазл собран!');
+                    }
+                    return;
+                }
+            }
+        }
+
+        function updatePuzzleStatus(msg) {
+            document.getElementById('puzzle-status').textContent = msg;
+        }
+
+        function resetPuzzle() {
+            initPuzzle();
+        }
+    </script>
+</body>
+</html>
