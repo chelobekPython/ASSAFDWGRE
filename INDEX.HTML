@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мини-Игры для Telegram</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 10px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .hidden {
+            display: none;
+        }
+
+        /* Tic-Tac-Toe Styles */
+        #tic-tac-toe-board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 5px;
+            margin: 20px auto;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            cursor: pointer;
+        }
+        .cell:hover {
+            background-color: #ccc;
+        }
+
+        /* Memory Game Styles */
+        #memory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 60px);
+            grid-gap: 5px;
+            margin: 20px auto;
+        }
+        .card {
+            width: 60px;
+            height: 60px;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .card.flipped {
+            transform: rotateY(180deg);
+            background-color: #fff;
+        }
+        .card.matched {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* Snake Game Styles */
+        #snake-canvas {
+            border: 1px solid #000;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Мини-Игры</h1>
+    <div id="menu">
+        <button onclick="startGame('tic-tac-toe')">Крестики-Нолики</button>
+        <button onclick="startGame('memory')">Игра на Память</button>
+        <button onclick="startGame('snake')">Змейка</button>
+    </div>
+
+    <!-- Tic-Tac-Toe -->
+    <div id="tic-tac-toe" class="game-container hidden">
+        <h2>Крестики-Нолики</h2>
+        <div id="tic-tac-toe-board"></div>
+        <p id="tic-tac-toe-status">Ход: X</p>
+        <button onclick="resetTicTacToe()">Сбросить</button>
+        <button onclick="backToMenu()">Назад</button>
+    </div>
+
+    <!-- Memory Game -->
+    <div id="memory" class="game-container hidden">
+        <h2>Игра на Память</h2>
+        <div id="memory-grid"></div>
+        <p id="memory-status">Найдите пары!</p>
+        <button onclick="resetMemory()">Сбросить</button>
+        <button onclick="backToMenu()">Назад</button>
+    </div>
+
+    <!-- Snake Game -->
+    <div id="snake" class="game-container hidden">
+        <h2>Змейка</h2>
+        <canvas id="snake-canvas" width="300" height="300"></canvas>
+        <p id="snake-score">Счет: 0</p>
+        <button onclick="resetSnake()">Сбросить</button>
+        <button onclick="backToMenu()">Назад</button>
+    </div>
+
+    <script>
+        // Общие функции
+        function startGame(gameId) {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById(gameId).classList.remove('hidden');
+            if (gameId === 'tic-tac-toe') initTicTacToe();
+            if (gameId === 'memory') initMemory();
+            if (gameId === 'snake') initSnake();
+        }
+
+        function backToMenu() {
+            document.querySelectorAll('.game-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById('menu').classList.remove('hidden');
+            // Очистка интервалов для змейки
+            if (snakeInterval) clearInterval(snakeInterval);
+        }
+
+        // Крестики-Нолики
+        let tttBoard = Array(9).fill(null);
+        let tttCurrentPlayer = 'X';
+        let tttGameOver = false;
+
+        function initTicTacToe() {
+            const board = document.getElementById('tic-tac-toe-board');
+            board.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', handleTicTacToeClick);
+                board.appendChild(cell);
+            }
+            updateTicTacToeStatus('Ход: X');
+            tttBoard = Array(9).fill(null);
+            tttCurrentPlayer = 'X';
+            tttGameOver = false;
+        }
+
+        function handleTicTacToeClick(e) {
+            if (tttGameOver) return;
+            const index = e.target.dataset.index;
+            if (tttBoard[index]) return;
+            tttBoard[index] = tttCurrentPlayer;
+            e.target.textContent = tttCurrentPlayer;
+            if (checkTicTacToeWin()) {
+                updateTicTacToeStatus(`Победил ${tttCurrentPlayer}!`);
+                tttGameOver = true;
+            } else if (tttBoard.every(cell => cell)) {
+                updateTicTacToeStatus('Ничья!');
+                tttGameOver = true;
+            } else {
+                tttCurrentPlayer = tttCurrentPlayer === 'X' ? 'O' : 'X';
+                updateTicTacToeStatus(`Ход: ${tttCurrentPlayer}`);
+            }
+        }
+
+        function checkTicTacToeWin() {
+            const wins = [
+                [0,1,2], [3,4,5], [6,7,8],
+                [0,3,6], [1,4,7], [2,5,8],
+                [0,4,8], [2,4,6]
+            ];
+            return wins.some(combo => combo.every(i => tttBoard[i] === tttCurrentPlayer));
+        }
+
+        function updateTicTacToeStatus(msg) {
+            document.getElementById('tic-tac-toe-status').textContent = msg;
+        }
+
+        function resetTicTacToe() {
+            initTicTacToe();
+        }
+
+        // Игра на Память
+        let memoryCards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+
+        function initMemory() {
+            const grid = document.getElementById('memory-grid');
+            grid.innerHTML = '';
+            const symbols = ['🍎', '🍌', '🍒', '🍇', '🍉', '🍓', '🍑', '🍍'];
+            memoryCards = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < memoryCards.length; i++) {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.index = i;
+                card.addEventListener('click', handleMemoryClick);
+                grid.appendChild(card);
+            }
+            flippedCards = [];
+            matchedPairs = 0;
+            updateMemoryStatus('Найдите пары!');
+        }
+
+        function handleMemoryClick(e) {
+            if (flippedCards.length >= 2) return;
+            const index = e.target.dataset.index;
+            if (flippedCards.includes(index) || e.target.classList.contains('matched')) return;
+            e.target.textContent = memoryCards[index];
+            e.target.classList.add('flipped');
+            flippedCards.push(index);
+            if (flippedCards.length === 2) {
+                setTimeout(checkMemoryMatch, 1000);
+            }
+        }
+
+        function checkMemoryMatch() {
+            const [idx1, idx2] = flippedCards;
+            const card1 = document.querySelector(`.card[data-index="${idx1}"]`);
+            const card2 = document.querySelector(`.card[data-index="${idx2}"]`);
+            if (memoryCards[idx1] === memoryCards[idx2]) {
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                matchedPairs++;
+                if (matchedPairs === memoryCards.length / 2) {
+                    updateMemoryStatus('Вы выиграли!');
+                }
+            } else {
+                card1.textContent = '';
+                card2.textContent = '';
+                card1.classList.remove('flipped');
+                card2.classList.remove('flipped');
+            }
+            flippedCards = [];
+        }
+
+        function updateMemoryStatus(msg) {
+            document.getElementById('memory-status').textContent = msg;
+        }
+
+        function resetMemory() {
+            initMemory();
+        }
+
+        // Змейка
+        let snakeCanvas, snakeCtx, snake, food, direction, score, snakeInterval;
+
+        function initSnake() {
+            snakeCanvas = document.getElementById('snake-canvas');
+            snakeCtx = snakeCanvas.getContext('2d');
+            snake = [{x: 150, y: 150}, {x: 140, y: 150}, {x: 130, y: 150}];
+            food = generateFood();
+            direction = 'RIGHT';
+            score = 0;
+            updateSnakeScore();
+            document.addEventListener('keydown', handleSnakeKey);
+            snakeInterval = setInterval(updateSnake, 100);
+        }
+
+        function updateSnake() {
+            const head = {x: snake[0].x, y: snake[0].y};
+            if (direction === 'RIGHT') head.x += 10;
+            if (direction === 'LEFT') head.x -= 10;
+            if (direction === 'UP') head.y -= 10;
+            if (direction === 'DOWN') head.y += 10;
+
+            if (head.x >= 300 || head.x < 0 || head.y >= 300 || head.y < 0 || snake.some(s => s.x === head.x && s.y === head.y)) {
+                clearInterval(snakeInterval);
+                alert('Игра окончена! Счет: ' + score);
+                return;
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                updateSnakeScore();
+                food = generateFood();
+            } else {
+                snake.pop();
+            }
+
+            drawSnake();
+        }
+
+        function drawSnake() {
+            snakeCtx.clearRect(0, 0, 300, 300);
+            snakeCtx.fillStyle = 'green';
+            snake.forEach(s => snakeCtx.fillRect(s.x, s.y, 10, 10));
+            snakeCtx.fillStyle = 'red';
+            snakeCtx.fillRect(food.x, food.y, 10, 10);
+        }
+
+        function generateFood() {
+            return {x: Math.floor(Math.random() * 29) * 10, y: Math.floor(Math.random() * 29) * 10};
+        }
+
+        function handleSnakeKey(e) {
+            if (e.key === 'ArrowRight' && direction !== 'LEFT') direction = 'RIGHT';
+            if (e.key === 'ArrowLeft' && direction !== 'RIGHT') direction = 'LEFT';
+            if (e.key === 'ArrowUp' && direction !== 'DOWN') direction = 'UP';
+            if (e.key === 'ArrowDown' && direction !== 'UP') direction = 'DOWN';
+        }
+
+        function updateSnakeScore() {
+            document.getElementById('snake-score').textContent = `Счет: ${score}`;
+        }
+
+        function resetSnake() {
+            clearInterval(snakeInterval);
+            initSnake();
+        }
+    </script>
+</body>
+</html>
